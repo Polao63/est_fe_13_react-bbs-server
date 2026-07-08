@@ -1,4 +1,5 @@
 require("dotenv").config();
+
 const express = require("express");
 const cors = require("cors");
 const app = express();
@@ -11,21 +12,18 @@ const path = require("path");
 
 app.use(express.json()); //json->object
 app.use(express.urlencoded({ extended: true })); //html form ->object
-app.use("/uploads", express.static("uploads"));
-//   /uploads 주소로 접속시 upload 폴더에 접근 권한 부여
-
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+// /uploads  절대경로 upload 폴더에 접근 권한 부여
 
 let corsOptions = {
   origin: "*",
 };
 
-
 app.use(cors(corsOptions));
-
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, "uploads/");
+    cb(null, path.join(__dirname, "uploads"));
   },
   filename: function (req, file, cb) {
     const orinalExt = file.originalname.split(".")[1];
@@ -34,20 +32,16 @@ const storage = multer.diskStorage({
   },
 });
 
-
 const upload = multer({ storage: storage });
 
-
 const db = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
+  host: "localhost",
+  user: "user_bbs",
+  password: "12345",
+  database: "bbs",
 });
 
-
 db.connect();
-
 
 function deleteUploadedFile(filePath) {
   if (!filePath) return;
@@ -58,11 +52,9 @@ function deleteUploadedFile(filePath) {
   }
 }
 
-
 app.get("/", (req, res) => {
   res.send("Hello World!");
 });
-
 
 app.get("/list", (req, res) => {
   const sqlQuery =
@@ -72,7 +64,6 @@ app.get("/list", (req, res) => {
     res.send(result);
   });
 });
-
 
 app.get("/view", (req, res) => {
   console.log(req.query.id);
@@ -86,12 +77,10 @@ app.get("/view", (req, res) => {
   });
 });
 
-
 app.post("/write", upload.single("image"), (req, res) => {
   console.log(req.body);
   const { title, writer, content } = req.body;
-  const imagePath = req.file ? req.file.path : null; //req.file.path는 업로드된 파일의 경로
-
+  const imagePath = req.file ? `/uploads/${req.file.filename}` : null; //req.file.path는 업로드된 파일의 경로
 
   const sqlQuery = "insert into board (title,content,writer,image_path) values (?,?,?,?);";
   db.query(sqlQuery, [title, content, writer, imagePath], (err, result) => {
@@ -100,11 +89,9 @@ app.post("/write", upload.single("image"), (req, res) => {
   });
 });
 
-
 app.post("/delete", (req, res) => {
   console.log(req.body);
   const { id } = req.body;
-
 
   //글 번호 삭제할 이미지의 경로 파악
   db.query("SELECT image_path FROM board WHERE id=?", [id], (err, result) => {
@@ -113,14 +100,12 @@ app.post("/delete", (req, res) => {
     deleteUploadedFile(existingImagePath);
   });
 
-
   const sqlQuery = "DELETE FROM board WHERE id=?";
   db.query(sqlQuery, [id], (err, result) => {
     if (err) throw err;
     res.send(result);
   });
 });
-
 
 app.post("/deleteselect", (req, res) => {
   console.log(req.body);
@@ -135,7 +120,6 @@ app.post("/deleteselect", (req, res) => {
     }
   });
 
-
   //테이블에서 글 여러개 삭제
   const sqlQuery = `delete from board where id in (${boardIdList})`;
   db.query(sqlQuery, (err, result) => {
@@ -144,23 +128,19 @@ app.post("/deleteselect", (req, res) => {
   });
 });
 
-
 app.post("/update", upload.single("image"), (req, res) => {
   console.log(req.body);
   const { writer, title, content, id, remove_image } = req.body;
-  const imagePath = req.file ? req.file.path : null; //새이미지 정보 할당
+  const imagePath = req.file ? `/uploads/${req.file.filename}` : null; //새이미지 정보 할당
   const shouldRemoveImage = remove_image === "1";
-
 
   let sqlQuery;
   let params;
-
 
   //상황별 sqlQuery params 정의
   if (shouldRemoveImage && !imagePath) {
     //이미지 삭제 요청 O + 새이미지 X ->기존이미지 제거, image_path 값 비우기
     //서버에서 기존 이미지 삭제
-
 
     //글 번호 삭제할 이미지의 경로 파악
     db.query("SELECT image_path FROM board WHERE id=?", [id], (err, result) => {
@@ -168,7 +148,6 @@ app.post("/update", upload.single("image"), (req, res) => {
       const existingImagePath = result[0] ? result[0].image_path : null;
       deleteUploadedFile(existingImagePath);
     });
-
 
     sqlQuery = "UPDATE board SET writer=?, title=?, content=?, image_path=NULL WHERE id=?";
     params = [writer, title, content, id];
@@ -182,13 +161,11 @@ app.post("/update", upload.single("image"), (req, res) => {
     params = [writer, title, content, id];
   }
 
-
   db.query(sqlQuery, params, (err, result) => {
     if (err) throw err;
     res.send(result);
   });
 });
-
 
 app.listen(port, () => {
   console.log(`Example app listening on port ${port}`);
